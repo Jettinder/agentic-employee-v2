@@ -1,0 +1,22 @@
+{
+  "name": "agentic-employee-v2",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/cli.ts",
+    "demo:e2e": "tsx src/cli.ts runner start demo-e2e"
+  },
+  "dependencies": {
+    "pino": "^9.0.0",
+    "better-sqlite3": "^9.4.0",
+    "zod": "^3.23.0",
+    "yargs": "^17.7.2"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0",
+    "@types/node": "^20.11.0"
+  }
+}
