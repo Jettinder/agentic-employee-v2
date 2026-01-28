@@ -7,10 +7,9 @@ Quickstart
 - npm run build
 - npm run demo:e2e
 
-What the demo does
-- Creates demo_v2/
-- Writes demo_v2/main.sh
-- chmod + executes script
-- Verifies stdout contains "Agent OK" + ISO timestamp
-- Produces JSON logs and writes to .data/audit.sqlite
+Demo flow
+- Intentionally attempts a denied filesystem write outside sandbox, then auto-applies fallback to allowed path.
+- Creates demo_v2/, writes and chmods main.sh, runs it via terminal.
+- post-validate ensures stdout contains "Agent OK" + ISO timestamp.
+- JSON logs streamed and audit events written to .data/audit.sqlite.
 

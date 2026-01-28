@@ -8,6 +8,8 @@ export interface PlanStep {
   type: 'filesystem'|'terminal'|'editor'|'verify'|'policy'|'audit'|'custom';
   params: Record<string, unknown>;
   deps?: StepId[];
+  fallbackParams?: Record<string, unknown>;
+  retry?: { attempts: number; baseMs?: number; factor?: number; jitterPct?: number };
 }
 
 export interface RunContext {
