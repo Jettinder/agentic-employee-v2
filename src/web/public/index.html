@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agentic Employee Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 Agentic Employee Dashboard</h1>
+            <p>Autonomous Execution System with Guardrails & Audit</p>
+        </header>
+
+        <div class="grid">
+            <!-- Runner Control -->
+            <section class="card">
+                <h2>🚀 Runner Control</h2>
+                <div class="status-badge" id="runnerStatus">Ready</div>
+                <button id="startDemo" class="btn btn-primary">Start Demo E2E</button>
+                <div id="runnerOutput" class="output-box"></div>
+            </section>
+
+            <!-- Real-time Logs -->
+            <section class="card full-width">
+                <h2>📊 Real-time Execution Logs</h2>
+                <div class="log-controls">
+                    <button id="clearLogs" class="btn btn-secondary">Clear Logs</button>
+                    <span id="wsStatus" class="ws-status">⚫ Disconnected</span>
+                </div>
+                <div id="logStream" class="log-stream"></div>
+            </section>
+
+            <!-- Audit Logs -->
+            <section class="card">
+                <h2>📝 Audit Logs</h2>
+                <button id="refreshRuns" class="btn btn-secondary">Refresh Runs</button>
+                <div id="auditRuns" class="audit-list"></div>
+            </section>
+
+            <!-- Vault Management -->
+            <section class="card">
+                <h2>🔐 Vault (Secret Store)</h2>
+                <div class="form-group">
+                    <input type="text" id="secretName" placeholder="Secret name" class="input">
+                    <input type="password" id="secretValue" placeholder="Secret value" class="input">
+                    <input type="text" id="secretScopes" placeholder="Scopes (comma-separated)" class="input">
+                    <button id="addSecret" class="btn btn-primary">Add Secret</button>
+                </div>
+                <button id="refreshSecrets" class="btn btn-secondary">Refresh List</button>
+                <div id="secretsList" class="secrets-list"></div>
+            </section>
+        </div>
+
+        <footer>
+            <p>Full Agentic Employee (Enterprise) — V2</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

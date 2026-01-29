@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/cli.ts",
+    "web": "tsx src/web-start.ts",
     "demo:e2e": "tsx src/cli.ts runner start demo-e2e",
     "audit:byRun": "tsx src/cli.ts audit --runId=$RUN_ID",
     "vault:add": "tsx src/cli.ts vault add --name=$NAME --value=$VALUE --scopes=$SCOPES",
@@ -13,14 +14,20 @@
     "vault:revoke": "tsx src/cli.ts vault revoke --id=$ID"
   },
   "dependencies": {
-    "pino": "^9.0.0",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/ws": "^8.18.1",
     "better-sqlite3": "^9.4.0",
-    "zod": "^3.23.0",
-    "yargs": "^17.7.2"
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "pino": "^9.0.0",
+    "ws": "^8.19.0",
+    "yargs": "^17.7.2",
+    "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@types/node": "^20.11.0",
     "tsx": "^4.7.0",
-    "typescript": "^5.4.0",
-    "@types/node": "^20.11.0"
+    "typescript": "^5.4.0"
   }
 }
