@@ -1,17 +1,55 @@
 # Agentic Employee v2
 
-An autonomous AI employee that can understand objectives, plan execution, and complete tasks using multiple AI providers.
+An autonomous AI employee that can operate a computer like a human — clicking, typing, browsing, and completing complex tasks across applications.
 
 ## Features
 
-- **Multi-Provider AI**: Intelligent routing between OpenAI, Anthropic, and Perplexity
-- **Autonomous Execution**: Objective → Plan → Execute → Verify → Iterate
-- **Tool System**: Filesystem, terminal, editor, search, memory
-- **Guardrails**: Policy-based execution with sandbox support
-- **Audit Trail**: Complete logging of all actions and decisions
-- **Vault**: Secure secrets management
-- **Memory**: Persistent context and learning
-- **Web UI**: Dashboard and API for monitoring and control
+### 🧠 Domain Brain System
+8 specialized brains that auto-switch based on task:
+
+| Domain | Expertise | Autonomy |
+|--------|-----------|----------|
+| **Developer** | Coding, debugging, DevOps | 80% |
+| **Marketing** | Content, social, SEO, campaigns | 60% |
+| **Sales** | Leads, outreach, CRM, closing | 50% |
+| **Operations** | Automation, data, reporting | 90% |
+| **Finance** | Invoicing, budgets, analysis | 30% |
+| **HR** | Recruiting, onboarding, policies | 40% |
+| **Support** | Tickets, customer service | 70% |
+| **General** | Everything else | 70% |
+
+### 🛠️ Tools (45+)
+
+**Built-in (13):**
+- `filesystem` - Read, write, manage files
+- `terminal` - Execute shell commands
+- `editor` - Search/replace, patches
+- `search` - Web search via Perplexity
+- `computer` - Mouse, keyboard, screenshots, windows
+- `email` - Send emails, templates
+- `calendar` - Google Calendar events
+- `slack` - Send messages, notifications
+- `notify` - Multi-channel notifications
+- `memory` - Persistent storage
+- `think` - Reasoning tool
+- `report` - Progress reporting
+- `request_approval` - Human-in-the-loop
+
+**MCP Servers (32+):**
+- Context7 - Documentation lookup
+- Filesystem MCP - Extended file operations
+- Puppeteer - Browser automation
+- Memory - Knowledge graph
+
+### 🤖 AI Providers
+Intelligent routing to best model:
+
+| Task Type | Provider | Model |
+|-----------|----------|-------|
+| Coding | Anthropic | claude-sonnet-4-20250514 |
+| Search | Perplexity | sonar-pro |
+| Vision | OpenAI | gpt-4.1 |
+| General | Anthropic | claude-sonnet-4-20250514 |
 
 ## Quick Start
 
@@ -25,161 +63,108 @@ cp .env.example .env
 # Build
 npm run build
 
-# Check status (verifies API keys)
+# Check status
 npm run status
 
 # Run with an objective
-npm run dev run "Create a hello world Python script and run it"
+npm run dev -- run "Create a Python script that calculates prime numbers"
 
-# Interactive chat mode
+# Force specific domain
+npm run dev -- run "..." --domain developer
+
+# Interactive chat
 npm run chat
 
-# Generate a plan without executing
-npm run plan "Set up a Node.js project with TypeScript"
+# List domains
+npm run dev -- domains
+
+# Web dashboard
+npm run web
 ```
 
 ## CLI Commands
 
 ```bash
-# Run agent with objective
-agentic run "your objective here" --verbose
+# Agent execution
+npm run dev -- run <objective>          # Run task
+npm run dev -- run <obj> --domain <d>   # Force domain
+npm run dev -- run <obj> --verbose      # Detailed logs
+npm run chat                            # Interactive mode
+npm run plan <objective>                # Generate plan only
 
-# Interactive chat
-agentic chat
+# Domain management  
+npm run dev -- domains                  # List all domains
+npm run dev -- domains --show <domain>  # Domain details
 
-# Generate execution plan
-agentic plan "your objective" --output plan.json
+# System
+npm run status                          # System status
+npm run web                             # Start web dashboard
 
-# Status check
-agentic status
-
-# Memory operations
-agentic memory list
-agentic memory get <key>
-agentic memory set <key> <value> --tags "tag1,tag2"
-agentic memory search <query>
-agentic memory stats
-
-# Audit logs
-agentic audit --list
-agentic audit --runId <run-id>
-
-# Vault (secrets)
-agentic vault list
-agentic vault add --name API_KEY --value "secret" --scopes "api,external"
-agentic vault revoke --id <id>
+# Memory & Audit
+npm run dev -- memory list              # List memories
+npm run dev -- memory stats             # Memory statistics
+npm run dev -- audit --list             # List audit runs
 ```
-
-## Web Server
-
-```bash
-# Start web server (default port 3000)
-npm run web
-
-# API endpoints:
-# POST /api/agent/run          - Run objective
-# POST /api/agent/chat         - Chat message
-# POST /api/agent/plan         - Generate plan
-# GET  /api/agent/status       - System status
-# GET  /api/audit/runs         - List runs
-# GET  /api/memory             - List memory
-# POST /api/memory/search      - Search memory
-```
-
-## AI Provider Routing
-
-The system automatically selects the best AI provider for each task:
-
-| Task Type | Provider | Reason |
-|-----------|----------|--------|
-| Web Search | Perplexity | Real-time information |
-| Coding | Anthropic | Superior code generation |
-| Analysis | Anthropic | Deep reasoning |
-| Planning | Anthropic | Structured decomposition |
-| Vision | OpenAI | Image understanding |
-| General | Default | Configurable |
 
 ## Architecture
 
 ```
 src/
-├── ai/                 # AI provider layer
-│   ├── providers/      # OpenAI, Anthropic, Perplexity clients
-│   ├── router.ts       # Intelligent provider selection
-│   └── types.ts        # Shared types
-├── core/               # Core engine
+├── ai/                 # AI providers + routing
+│   ├── providers/      # OpenAI, Anthropic, Perplexity, Gemini
+│   └── router.ts       # Intelligent model selection
+├── core/               # Agent engine
 │   ├── agent-loop.ts   # Main execution loop
-│   ├── orchestrator.ts # Step execution
-│   └── types.ts        # Core types
+│   └── orchestrator.ts # Step execution
+├── domains/            # Domain Brain System
+│   ├── brains/         # 8 specialized domains
+│   ├── manager.ts      # Domain switching
+│   └── types.ts        # Type definitions
 ├── tools/              # Tool system
 │   ├── definitions.ts  # Tool schemas
 │   └── executor.ts     # Tool execution
-├── planner/            # Plan generation
+├── integrations/       # External services
+│   ├── email/          # SMTP/Gmail
+│   ├── calendar/       # Google Calendar
+│   ├── slack/          # Slack messaging
+│   └── notifications/  # Multi-channel alerts
+├── computer/           # Desktop automation
+├── mcp/                # MCP server integration
+├── scheduler/          # Cron-based tasks
 ├── memory/             # Persistent storage
-├── guardrails/         # Policy enforcement
-├── audit/              # Logging
-├── vault/              # Secrets
-├── execution/          # Low-level executors
-└── web/                # Web server & API
+├── audit/              # Action logging
+├── vault/              # Secrets management
+└── web/                # Dashboard & API
 ```
 
 ## Configuration
 
-Environment variables (`.env`):
+See `.env.example` for all options:
 
 ```bash
-# Required: At least one AI provider
-OPENAI_API_KEY=sk-...
+# AI Providers (at least one required)
 ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
 PERPLEXITY_API_KEY=pplx-...
+GEMINI_API_KEY=AIza...
 
-# Optional: Default provider
-DEFAULT_AI_PROVIDER=anthropic  # or openai, perplexity
-
-# Optional: Model overrides
-OPENAI_MODEL=gpt-4-turbo-preview
-ANTHROPIC_MODEL=claude-3-5-sonnet-20241022
-PERPLEXITY_MODEL=sonar-pro
+# Integrations (optional)
+SMTP_HOST=smtp.gmail.com
+SMTP_USER=...
+SLACK_BOT_TOKEN=xoxb-...
+GOOGLE_CLIENT_ID=...
 ```
 
-## Available Tools
+## How It Works
 
-| Tool | Description |
-|------|-------------|
-| `filesystem` | Read, write, mkdir, chmod, list, delete, move, copy |
-| `terminal` | Execute shell commands |
-| `editor` | Search/replace, insert, delete lines, apply patches |
-| `search` | Web search (via Perplexity) |
-| `think` | Structured reasoning |
-| `memory` | Store/retrieve persistent data |
-| `request_approval` | Human-in-the-loop for sensitive actions |
-| `report` | Progress and completion reporting |
+1. **You give an objective** → "Write a sales email for our new product"
+2. **Domain auto-detected** → Switches to Sales brain
+3. **Agent plans** → Breaks into steps
+4. **Agent executes** → Uses tools to complete each step
+5. **Agent verifies** → Checks results, adapts if needed
+6. **Agent reports** → Provides final summary
 
-## Example Usage
-
-```typescript
-import { runObjective } from './core/agent-loop.js';
-
-const result = await runObjective(
-  "Create a REST API with Express that has CRUD endpoints for users",
-  { verbose: true, maxIterations: 30 }
-);
-
-console.log(result.finalResponse);
-```
-
-## Development
-
-```bash
-# Run in dev mode
-npm run dev -- run "test objective"
-
-# Build
-npm run build
-
-# Run built version
-npm start run "test objective"
-```
+The agent handles errors autonomously, tries alternative approaches, and asks for approval only when necessary (based on domain autonomy level).
 
 ## License
 
