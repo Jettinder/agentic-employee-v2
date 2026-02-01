@@ -363,6 +363,171 @@ export const journalTool: ToolDefinition = {
   },
 };
 
+// ============================================
+// OpenClaw-style Tools (web, browser, image, tts)
+// ============================================
+
+export const webSearchTool: ToolDefinition = {
+  name: 'web_search',
+  description: 'Search the web using Brave Search API. Returns titles, URLs, and snippets. Use for research, current information, news.',
+  parameters: {
+    type: 'object',
+    properties: {
+      query: {
+        type: 'string',
+        description: 'Search query string',
+      },
+      count: {
+        type: 'number',
+        description: 'Number of results to return (1-10, default 5)',
+      },
+      country: {
+        type: 'string',
+        description: '2-letter country code for region-specific results (e.g., "US", "IT", "DE")',
+      },
+      freshness: {
+        type: 'string',
+        description: 'Filter by time: "pd" (24h), "pw" (week), "pm" (month), "py" (year)',
+      },
+    },
+    required: ['query'],
+  },
+};
+
+export const webFetchTool: ToolDefinition = {
+  name: 'web_fetch',
+  description: 'Fetch and extract readable content from a URL. Converts HTML to markdown or text. Use to read web pages, articles, documentation.',
+  parameters: {
+    type: 'object',
+    properties: {
+      url: {
+        type: 'string',
+        description: 'HTTP or HTTPS URL to fetch',
+      },
+      extractMode: {
+        type: 'string',
+        enum: ['markdown', 'text'],
+        description: 'Output format (default: markdown)',
+      },
+      maxChars: {
+        type: 'number',
+        description: 'Maximum characters to return (default: 50000)',
+      },
+    },
+    required: ['url'],
+  },
+};
+
+export const browserTool: ToolDefinition = {
+  name: 'browser',
+  description: 'Control a web browser for automation. Navigate, click, type, take screenshots, evaluate JavaScript.',
+  parameters: {
+    type: 'object',
+    properties: {
+      action: {
+        type: 'string',
+        enum: ['navigate', 'click', 'type', 'screenshot', 'evaluate', 'scroll', 'wait', 'close'],
+        description: 'Browser action to perform',
+      },
+      url: {
+        type: 'string',
+        description: 'URL to navigate to (for navigate action)',
+      },
+      selector: {
+        type: 'string',
+        description: 'CSS selector for element (for click, type actions)',
+      },
+      text: {
+        type: 'string',
+        description: 'Text to type (for type action)',
+      },
+      script: {
+        type: 'string',
+        description: 'JavaScript to evaluate (for evaluate action)',
+      },
+      timeout: {
+        type: 'number',
+        description: 'Timeout in milliseconds',
+      },
+    },
+    required: ['action'],
+  },
+};
+
+export const imageTool: ToolDefinition = {
+  name: 'image_analyze',
+  description: 'Analyze an image using vision AI. Describe contents, extract text (OCR), answer questions about the image.',
+  parameters: {
+    type: 'object',
+    properties: {
+      image: {
+        type: 'string',
+        description: 'Image path (local file) or URL',
+      },
+      prompt: {
+        type: 'string',
+        description: 'Question or instruction about the image (default: "Describe this image")',
+      },
+    },
+    required: ['image'],
+  },
+};
+
+export const ttsTool: ToolDefinition = {
+  name: 'tts',
+  description: 'Convert text to speech audio. Returns path to audio file.',
+  parameters: {
+    type: 'object',
+    properties: {
+      text: {
+        type: 'string',
+        description: 'Text to convert to speech',
+      },
+      voice: {
+        type: 'string',
+        description: 'Voice to use (provider-specific)',
+      },
+      output: {
+        type: 'string',
+        description: 'Output file path (optional, auto-generated if not specified)',
+      },
+    },
+    required: ['text'],
+  },
+};
+
+export const httpTool: ToolDefinition = {
+  name: 'http',
+  description: 'Make HTTP requests to APIs. Supports GET, POST, PUT, DELETE with headers and body.',
+  parameters: {
+    type: 'object',
+    properties: {
+      method: {
+        type: 'string',
+        enum: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+        description: 'HTTP method',
+      },
+      url: {
+        type: 'string',
+        description: 'URL to request',
+      },
+      headers: {
+        type: 'object',
+        description: 'Request headers as key-value pairs',
+      },
+      body: {
+        type: 'string',
+        description: 'Request body (for POST, PUT, PATCH)',
+      },
+      timeout: {
+        type: 'number',
+        description: 'Timeout in milliseconds (default: 30000)',
+      },
+    },
+    required: ['method', 'url'],
+  },
+};
+
 /**
  * Get all built-in tools
  */
@@ -378,6 +543,12 @@ export function getBuiltinTools(): ToolDefinition[] {
     reportTool,
     computerTool,
     journalTool,
+    webSearchTool,
+    webFetchTool,
+    browserTool,
+    imageTool,
+    ttsTool,
+    httpTool,
     ...getIntegrationTools(),
   ];
 }

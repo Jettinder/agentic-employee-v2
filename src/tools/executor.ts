@@ -76,6 +76,24 @@ export async function executeTool(
       case 'journal':
         result = await executeJournal(ctx, args);
         break;
+      case 'web_search':
+        result = await executeWebSearch(ctx, args);
+        break;
+      case 'web_fetch':
+        result = await executeWebFetch(ctx, args);
+        break;
+      case 'browser':
+        result = await executeBrowser(ctx, args);
+        break;
+      case 'image_analyze':
+        result = await executeImageAnalyze(ctx, args);
+        break;
+      case 'tts':
+        result = await executeTTS(ctx, args);
+        break;
+      case 'http':
+        result = await executeHTTP(ctx, args);
+        break;
       default:
         // Check if it's an MCP tool
         const mcpManager = getMCPManager();
@@ -681,5 +699,315 @@ async function executeJournal(ctx: RunContext, args: any): Promise<any> {
     
     default:
       throw new Error(`Unknown journal operation: ${op}`);
+  }
+}
+
+// ============================================
+// OpenClaw-style Tools Implementation
+// ============================================
+
+/**
+ * Web Search using Brave Search API
+ */
+async function executeWebSearch(ctx: RunContext, args: any): Promise<any> {
+  const { query, count = 5, country = 'US', freshness } = args;
+  
+  const apiKey = process.env.BRAVE_API_KEY;
+  if (!apiKey) {
+    throw new Error('BRAVE_API_KEY not configured. Get one at https://brave.com/search/api/');
+  }
+
+  const params = new URLSearchParams({
+    q: query,
+    count: String(Math.min(count, 10)),
+    country,
+  });
+  if (freshness) params.append('freshness', freshness);
+
+  const response = await fetch(`https://api.search.brave.com/res/v1/web/search?${params}`, {
+    headers: {
+      'Accept': 'application/json',
+      'X-Subscription-Token': apiKey,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Brave Search error: ${response.status} ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  
+  // Extract relevant results
+  const results = (data.web?.results || []).map((r: any) => ({
+    title: r.title,
+    url: r.url,
+    description: r.description,
+    age: r.age,
+  }));
+
+  return {
+    query,
+    resultCount: results.length,
+    results,
+  };
+}
+
+/**
+ * Web Fetch - extract content from URL
+ */
+async function executeWebFetch(ctx: RunContext, args: any): Promise<any> {
+  const { url, extractMode = 'markdown', maxChars = 50000 } = args;
+
+  const response = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; AgenticEmployee/1.0)',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Fetch error: ${response.status} ${response.statusText}`);
+  }
+
+  const html = await response.text();
+  
+  // Simple HTML to text/markdown extraction
+  let content = html
+    // Remove scripts and styles
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    // Convert common elements
+    .replace(/<h1[^>]*>(.*?)<\/h1>/gi, '\n# $1\n')
+    .replace(/<h2[^>]*>(.*?)<\/h2>/gi, '\n## $1\n')
+    .replace(/<h3[^>]*>(.*?)<\/h3>/gi, '\n### $1\n')
+    .replace(/<p[^>]*>(.*?)<\/p>/gi, '\n$1\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<li[^>]*>(.*?)<\/li>/gi, '- $1\n')
+    .replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, extractMode === 'markdown' ? '[$2]($1)' : '$2')
+    .replace(/<strong[^>]*>(.*?)<\/strong>/gi, extractMode === 'markdown' ? '**$1**' : '$1')
+    .replace(/<em[^>]*>(.*?)<\/em>/gi, extractMode === 'markdown' ? '*$1*' : '$1')
+    .replace(/<code[^>]*>(.*?)<\/code>/gi, extractMode === 'markdown' ? '`$1`' : '$1')
+    // Remove remaining tags
+    .replace(/<[^>]+>/g, '')
+    // Clean up whitespace
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/\n\s*\n\s*\n/g, '\n\n')
+    .trim();
+
+  // Truncate if needed
+  if (content.length > maxChars) {
+    content = content.slice(0, maxChars) + '\n\n[Content truncated...]';
+  }
+
+  return {
+    url,
+    extractMode,
+    charCount: content.length,
+    content,
+  };
+}
+
+/**
+ * Browser Control - uses Puppeteer MCP or direct control
+ */
+async function executeBrowser(ctx: RunContext, args: any): Promise<any> {
+  const { action, url, selector, text, script, timeout = 30000 } = args;
+  
+  // Try to use Puppeteer MCP if available
+  const mcpManager = getMCPManager();
+  
+  switch (action) {
+    case 'navigate':
+      if (mcpManager.isMCPTool('puppeteer__puppeteer_navigate')) {
+        return mcpManager.executeTool('puppeteer__puppeteer_navigate', { url });
+      }
+      throw new Error('Browser navigation requires Puppeteer MCP');
+      
+    case 'screenshot':
+      if (mcpManager.isMCPTool('puppeteer__puppeteer_screenshot')) {
+        return mcpManager.executeTool('puppeteer__puppeteer_screenshot', { name: `screenshot-${Date.now()}` });
+      }
+      throw new Error('Browser screenshot requires Puppeteer MCP');
+      
+    case 'click':
+      if (mcpManager.isMCPTool('puppeteer__puppeteer_click')) {
+        return mcpManager.executeTool('puppeteer__puppeteer_click', { selector });
+      }
+      throw new Error('Browser click requires Puppeteer MCP');
+      
+    case 'type':
+      if (mcpManager.isMCPTool('puppeteer__puppeteer_fill')) {
+        return mcpManager.executeTool('puppeteer__puppeteer_fill', { selector, value: text });
+      }
+      throw new Error('Browser type requires Puppeteer MCP');
+      
+    case 'evaluate':
+      if (mcpManager.isMCPTool('puppeteer__puppeteer_evaluate')) {
+        return mcpManager.executeTool('puppeteer__puppeteer_evaluate', { script });
+      }
+      throw new Error('Browser evaluate requires Puppeteer MCP');
+      
+    default:
+      throw new Error(`Unknown browser action: ${action}`);
+  }
+}
+
+/**
+ * Image Analysis using Vision AI
+ */
+async function executeImageAnalyze(ctx: RunContext, args: any): Promise<any> {
+  const { image, prompt = 'Describe this image in detail' } = args;
+  const { promises: fs } = await import('fs');
+  const path = await import('path');
+  
+  // Check if it's a local file or URL
+  let imageData: string;
+  let mimeType: string;
+  
+  if (image.startsWith('http://') || image.startsWith('https://')) {
+    // Fetch image from URL
+    const response = await fetch(image);
+    if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`);
+    const buffer = await response.arrayBuffer();
+    imageData = Buffer.from(buffer).toString('base64');
+    mimeType = response.headers.get('content-type') || 'image/jpeg';
+  } else {
+    // Read local file
+    const buffer = await fs.readFile(image);
+    imageData = buffer.toString('base64');
+    const ext = path.extname(image).toLowerCase();
+    mimeType = ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+  }
+
+  // Use OpenAI Vision (most reliable for images)
+  const openaiKey = process.env.OPENAI_API_KEY;
+  if (!openaiKey) {
+    throw new Error('OPENAI_API_KEY required for image analysis');
+  }
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${openaiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      max_tokens: 1000,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: prompt },
+          { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageData}` } },
+        ],
+      }],
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Vision API error: ${response.status} - ${error}`);
+  }
+
+  const data = await response.json();
+  return {
+    image,
+    prompt,
+    analysis: data.choices[0]?.message?.content || 'No analysis available',
+  };
+}
+
+/**
+ * Text to Speech
+ */
+async function executeTTS(ctx: RunContext, args: any): Promise<any> {
+  const { text, voice = 'alloy', output } = args;
+  const { promises: fs } = await import('fs');
+  const path = await import('path');
+  const os = await import('os');
+
+  const openaiKey = process.env.OPENAI_API_KEY;
+  if (!openaiKey) {
+    throw new Error('OPENAI_API_KEY required for TTS');
+  }
+
+  const response = await fetch('https://api.openai.com/v1/audio/speech', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${openaiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'tts-1',
+      input: text,
+      voice,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`TTS API error: ${response.status} - ${error}`);
+  }
+
+  const audioBuffer = await response.arrayBuffer();
+  const outputPath = output || path.join(os.tmpdir(), `tts-${Date.now()}.mp3`);
+  await fs.writeFile(outputPath, Buffer.from(audioBuffer));
+
+  return {
+    text: text.slice(0, 100) + (text.length > 100 ? '...' : ''),
+    voice,
+    outputPath,
+    size: audioBuffer.byteLength,
+  };
+}
+
+/**
+ * HTTP Request tool
+ */
+async function executeHTTP(ctx: RunContext, args: any): Promise<any> {
+  const { method, url, headers = {}, body, timeout = 30000 } = args;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const options: RequestInit = {
+      method,
+      headers: {
+        'User-Agent': 'AgenticEmployee/1.0',
+        ...headers,
+      },
+      signal: controller.signal,
+    };
+
+    if (body && ['POST', 'PUT', 'PATCH'].includes(method)) {
+      options.body = typeof body === 'string' ? body : JSON.stringify(body);
+      if (!headers['Content-Type']) {
+        (options.headers as any)['Content-Type'] = 'application/json';
+      }
+    }
+
+    const response = await fetch(url, options);
+    const contentType = response.headers.get('content-type') || '';
+    
+    let responseBody: any;
+    if (contentType.includes('application/json')) {
+      responseBody = await response.json();
+    } else {
+      responseBody = await response.text();
+    }
+
+    return {
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries()),
+      body: responseBody,
+    };
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
