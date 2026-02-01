@@ -207,7 +207,7 @@ export class AIRouter {
   }
 
   /**
-   * Route and complete a request
+   * Route and complete a request with automatic fallback
    */
   async complete(
     request: CompletionRequest, 
@@ -215,40 +215,63 @@ export class AIRouter {
     options?: { forceProvider?: ProviderName }
   ): Promise<CompletionResponse> {
     const selection = this.selectProvider(request, options?.forceProvider);
-    const provider = this.providers.get(selection.provider)!;
+    const availableProviders = this.getAvailableProviders();
+    
+    // Build fallback chain: selected provider first, then others
+    const providerChain = [selection.provider, ...availableProviders.filter(p => p !== selection.provider)];
+    
+    let lastError: Error | null = null;
+    
+    for (const providerName of providerChain) {
+      const provider = this.providers.get(providerName);
+      if (!provider?.isAvailable()) continue;
+      
+      // Get model for this provider
+      const model = providerName === selection.provider 
+        ? selection.model 
+        : undefined; // Use provider's default
+      
+      const finalRequest = model 
+        ? { ...request, model }
+        : request;
 
-    // Override model if specified by routing
-    const finalRequest = selection.model 
-      ? { ...request, model: selection.model }
-      : request;
+      if (ctx) {
+        await auditEvent(ctx, 'AI_REQUEST', {
+          provider: providerName,
+          model: finalRequest.model,
+          reason: providerName === selection.provider ? selection.reason : 'Fallback provider',
+          taskType: this.detectTaskType(request),
+          messageCount: request.messages.length,
+          toolCount: request.tools?.length || 0,
+        });
+      }
 
-    if (ctx) {
-      await auditEvent(ctx, 'AI_REQUEST', {
-        provider: selection.provider,
-        model: finalRequest.model,
-        reason: selection.reason,
-        taskType: this.detectTaskType(request),
-        messageCount: request.messages.length,
-        toolCount: request.tools?.length || 0,
-      });
+      try {
+        const startTime = Date.now();
+        const response = await provider.complete(finalRequest);
+        const duration = Date.now() - startTime;
+
+        if (ctx) {
+          await auditEvent(ctx, 'AI_RESPONSE', {
+            provider: providerName,
+            model: response.model,
+            durationMs: duration,
+            usage: response.usage,
+            finishReason: response.finish_reason,
+            hasToolCalls: !!response.message.tool_calls?.length,
+          });
+        }
+
+        return response;
+      } catch (error: any) {
+        lastError = error;
+        console.warn(`[Router] Provider ${providerName} failed: ${error.message}, trying next...`);
+        continue;
+      }
     }
-
-    const startTime = Date.now();
-    const response = await provider.complete(finalRequest);
-    const duration = Date.now() - startTime;
-
-    if (ctx) {
-      await auditEvent(ctx, 'AI_RESPONSE', {
-        provider: selection.provider,
-        model: response.model,
-        durationMs: duration,
-        usage: response.usage,
-        finishReason: response.finish_reason,
-        hasToolCalls: !!response.message.tool_calls?.length,
-      });
-    }
-
-    return response;
+    
+    // All providers failed
+    throw lastError || new Error('All AI providers failed');
   }
 
   /**
