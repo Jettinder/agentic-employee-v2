@@ -8,12 +8,18 @@ export { developerBrain } from './developer.js';
 export { marketingBrain } from './marketing.js';
 export { salesBrain } from './sales.js';
 export { operationsBrain } from './operations.js';
+export { financeBrain } from './finance.js';
+export { hrBrain } from './hr.js';
+export { supportBrain } from './support.js';
 
 import { generalBrain } from './general.js';
 import { developerBrain } from './developer.js';
 import { marketingBrain } from './marketing.js';
 import { salesBrain } from './sales.js';
 import { operationsBrain } from './operations.js';
+import { financeBrain } from './finance.js';
+import { hrBrain } from './hr.js';
+import { supportBrain } from './support.js';
 import type { DomainBrain, DomainId } from '../types.js';
 
 /**
@@ -25,10 +31,9 @@ export const ALL_BRAINS: Record<DomainId, DomainBrain> = {
   marketing: marketingBrain,
   sales: salesBrain,
   operations: operationsBrain,
-  // Placeholders for future domains
-  finance: generalBrain, // TODO: Create finance brain
-  hr: generalBrain, // TODO: Create HR brain
-  support: generalBrain, // TODO: Create support brain
+  finance: financeBrain,
+  hr: hrBrain,
+  support: supportBrain,
 };
 
 /**
