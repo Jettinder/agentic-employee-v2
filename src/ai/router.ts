@@ -226,14 +226,16 @@ export class AIRouter {
       const provider = this.providers.get(providerName);
       if (!provider?.isAvailable()) continue;
       
-      // Get model for this provider
-      const model = providerName === selection.provider 
-        ? selection.model 
-        : undefined; // Use provider's default
-      
-      const finalRequest = model 
-        ? { ...request, model }
-        : request;
+      // Get model for this provider - only use selected model for primary provider
+      // For fallback providers, remove model to use their default
+      let finalRequest: CompletionRequest;
+      if (providerName === selection.provider && selection.model) {
+        finalRequest = { ...request, model: selection.model };
+      } else {
+        // Remove model from request for fallback providers
+        const { model: _removed, ...requestWithoutModel } = request;
+        finalRequest = requestWithoutModel as CompletionRequest;
+      }
 
       if (ctx) {
         await auditEvent(ctx, 'AI_REQUEST', {
