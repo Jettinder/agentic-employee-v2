@@ -11,6 +11,7 @@ import { executeTool, ToolResult } from '../tools/executor.js';
 import { auditEvent } from '../audit/logger.js';
 import { emitRunReport } from './report.js';
 import { initMCP, getMCPManager } from '../mcp/index.js';
+import { DomainManager, getDomainManager, createDomainManager, type DomainId } from '../domains/index.js';
 
 export interface AgentConfig {
   maxIterations?: number;
@@ -18,6 +19,10 @@ export interface AgentConfig {
   systemPrompt?: string;
   tools?: ToolDefinition[];
   verbose?: boolean;
+  /** Specific domain to use */
+  domain?: DomainId;
+  /** Auto-detect domain from objective */
+  autoDomain?: boolean;
 }
 
 export interface AgentResult {
@@ -62,6 +67,7 @@ export class AgentLoop {
   private config: AgentConfig;
   private tools: ToolDefinition[];
   private mcpInitialized: boolean = false;
+  private domainManager: DomainManager;
 
   constructor(router?: AIRouter, config?: AgentConfig) {
     this.router = router || createRouterFromEnv();
@@ -70,9 +76,20 @@ export class AgentLoop {
       maxToolCalls: 100,
       systemPrompt: DEFAULT_SYSTEM_PROMPT,
       verbose: false,
+      autoDomain: true, // Auto-detect domain by default
       ...config,
     };
     this.tools = config?.tools || getAllTools();
+    
+    // Initialize domain manager
+    this.domainManager = createDomainManager(config?.domain || 'general');
+  }
+  
+  /**
+   * Get domain manager
+   */
+  getDomainManager(): DomainManager {
+    return this.domainManager;
   }
 
   /**
@@ -97,8 +114,30 @@ export class AgentLoop {
    * Run the agent loop for an objective
    */
   async run(ctx: RunContext, objective: string): Promise<AgentResult> {
+    // Auto-detect domain if enabled
+    if (this.config.autoDomain !== false) {
+      await this.domainManager.autoSwitchDomain(objective, ctx);
+    }
+    
+    // Get domain-specific system prompt
+    const domainPrompt = this.domainManager.getSystemPrompt();
+    const systemPrompt = this.config.systemPrompt 
+      ? `${domainPrompt}\n\n---\n\n${this.config.systemPrompt}`
+      : domainPrompt;
+    
+    // Filter tools for current domain
+    const domainTools = this.domainManager.filterToolsForDomain(this.tools);
+    
+    const currentDomain = this.domainManager.getCurrentDomain();
+    
+    if (this.config.verbose) {
+      console.log(`[Agent] Domain: ${currentDomain.name} (${currentDomain.id})`);
+      console.log(`[Agent] Autonomy level: ${this.domainManager.getAutonomyLevel()}`);
+      console.log(`[Agent] Tools available: ${domainTools.length}`);
+    }
+    
     const messages: Message[] = [
-      { role: 'system', content: this.config.systemPrompt! },
+      { role: 'system', content: systemPrompt },
       { role: 'user', content: objective },
     ];
 
@@ -107,7 +146,11 @@ export class AgentLoop {
     const errors: string[] = [];
     let finalResponse = '';
 
-    await auditEvent(ctx, 'AGENT_START', { objective });
+    await auditEvent(ctx, 'AGENT_START', { 
+      objective,
+      domain: currentDomain.id,
+      autonomyLevel: this.domainManager.getAutonomyLevel(),
+    });
 
     while (iterations < this.config.maxIterations!) {
       iterations++;
@@ -120,7 +163,7 @@ export class AgentLoop {
         // Get AI response
         const response = await this.router.complete({
           messages,
-          tools: this.tools,
+          tools: domainTools,
         }, ctx);
 
         // Add assistant message to history

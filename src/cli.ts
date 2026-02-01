@@ -13,6 +13,7 @@ import { addSecret, listSecrets, revokeSecret } from './vault/store.js';
 import { runObjective, createAgentLoop } from './core/agent-loop.js';
 import { generatePlan, createPlanner } from './planner/index.js';
 import { getMemoryStore } from './memory/index.js';
+import { getDomainManager, listDomains, getBrain } from './domains/index.js';
 import type { RunContext } from './core/types.js';
 import type { Message } from './ai/types.js';
 import readline from 'readline';
@@ -43,6 +44,15 @@ async function main() {
           type: 'number',
           default: 100,
           description: 'Maximum tool calls',
+        })
+        .option('domain', {
+          alias: 'd',
+          type: 'string',
+          description: 'Force specific domain (developer, marketing, sales, operations, general)',
+        })
+        .option('no-auto-domain', {
+          type: 'boolean',
+          description: 'Disable auto domain detection',
         }),
       async (argv) => {
         console.log('\n🤖 Agentic Employee starting...\n');
@@ -52,6 +62,8 @@ async function main() {
           verbose: argv.verbose,
           maxIterations: argv['max-iterations'],
           maxToolCalls: argv['max-tools'],
+          domain: argv.domain as any,
+          autoDomain: !argv['no-auto-domain'],
         });
 
         console.log('\n' + '═'.repeat(60));
@@ -326,6 +338,59 @@ async function main() {
         const stats = await store.stats();
         console.log(`\nMemory: ${stats.entryCount} entries, ${stats.conversationCount} conversations`);
         console.log('');
+      }
+    )
+
+    // ============ DOMAINS COMMAND ============
+    .command(
+      'domains',
+      'List available domain brains',
+      (y) => y
+        .option('show', {
+          alias: 's',
+          type: 'string',
+          description: 'Show details for specific domain',
+        }),
+      async (argv) => {
+        if (argv.show) {
+          const brain = getBrain(argv.show as any);
+          console.log(`\n🧠 Domain: ${brain.name}\n`);
+          console.log(`ID: ${brain.id}`);
+          console.log(`Description: ${brain.description}`);
+          console.log(`Autonomy Level: ${(brain.autonomyLevel || 0.7) * 100}%`);
+          console.log(`Preferred Model: ${brain.preferredModel || 'default'}`);
+          
+          if (brain.triggerKeywords && brain.triggerKeywords.length > 0) {
+            console.log(`\nTrigger Keywords: ${brain.triggerKeywords.slice(0, 10).join(', ')}...`);
+          }
+          
+          if (brain.rules && brain.rules.length > 0) {
+            console.log(`\nRules (${brain.rules.length}):`);
+            brain.rules.forEach(r => {
+              const icon = r.type === 'must' ? '✅' : r.type === 'must_not' ? '❌' : '⚠️';
+              console.log(`  ${icon} ${r.description}`);
+            });
+          }
+          
+          if (brain.preferredTools && brain.preferredTools.length > 0) {
+            console.log(`\nPreferred Tools: ${brain.preferredTools.join(', ')}`);
+          }
+          
+          if (brain.restrictedTools && brain.restrictedTools.length > 0) {
+            console.log(`Restricted Tools: ${brain.restrictedTools.join(', ')}`);
+          }
+          
+          console.log('');
+        } else {
+          console.log('\n🧠 Available Domain Brains\n');
+          const domains = listDomains();
+          domains.forEach(d => {
+            console.log(`  ${d.id.padEnd(12)} - ${d.name}`);
+            console.log(`  ${''.padEnd(12)}   ${d.description}\n`);
+          });
+          console.log('Use --show <domain> to see details for a specific domain.');
+          console.log('Use --domain <domain> with "run" to force a specific domain.\n');
+        }
       }
     )
 
