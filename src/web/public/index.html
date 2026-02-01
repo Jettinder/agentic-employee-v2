@@ -1,63 +1,383 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agentic Employee Dashboard</title>
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agentic Employee</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+          colors: {
+            dark: { 800: '#1a1a2e', 900: '#16162a', 950: '#0f0f1a' }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    [x-cloak] { display: none !important; }
+    .typing-indicator span { animation: typing 1.4s infinite both; }
+    .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes typing {
+      0%, 60%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-4px); }
+    }
+    .message-enter { animation: slideIn 0.3s ease-out; }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 3px; }
+  </style>
 </head>
-<body>
-    <div class="container">
-        <header>
-            <h1>🤖 Agentic Employee Dashboard</h1>
-            <p>Autonomous Execution System with Guardrails & Audit</p>
-        </header>
-
-        <div class="grid">
-            <!-- Runner Control -->
-            <section class="card">
-                <h2>🚀 Runner Control</h2>
-                <div class="status-badge" id="runnerStatus">Ready</div>
-                <button id="startDemo" class="btn btn-primary">Start Demo E2E</button>
-                <div id="runnerOutput" class="output-box"></div>
-            </section>
-
-            <!-- Real-time Logs -->
-            <section class="card full-width">
-                <h2>📊 Real-time Execution Logs</h2>
-                <div class="log-controls">
-                    <button id="clearLogs" class="btn btn-secondary">Clear Logs</button>
-                    <span id="wsStatus" class="ws-status">⚫ Disconnected</span>
-                </div>
-                <div id="logStream" class="log-stream"></div>
-            </section>
-
-            <!-- Audit Logs -->
-            <section class="card">
-                <h2>📝 Audit Logs</h2>
-                <button id="refreshRuns" class="btn btn-secondary">Refresh Runs</button>
-                <div id="auditRuns" class="audit-list"></div>
-            </section>
-
-            <!-- Vault Management -->
-            <section class="card">
-                <h2>🔐 Vault (Secret Store)</h2>
-                <div class="form-group">
-                    <input type="text" id="secretName" placeholder="Secret name" class="input">
-                    <input type="password" id="secretValue" placeholder="Secret value" class="input">
-                    <input type="text" id="secretScopes" placeholder="Scopes (comma-separated)" class="input">
-                    <button id="addSecret" class="btn btn-primary">Add Secret</button>
-                </div>
-                <button id="refreshSecrets" class="btn btn-secondary">Refresh List</button>
-                <div id="secretsList" class="secrets-list"></div>
-            </section>
+<body class="bg-dark-950 text-gray-100 font-sans min-h-screen" x-data="app()">
+  
+  <!-- Header -->
+  <header class="fixed top-0 left-0 right-0 bg-dark-900/80 backdrop-blur-lg border-b border-gray-800 z-50">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
+          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+          </svg>
         </div>
+        <div>
+          <h1 class="text-lg font-semibold">Agentic Employee</h1>
+          <p class="text-xs text-gray-500">Your AI-powered assistant</p>
+        </div>
+      </div>
+      
+      <div class="flex items-center gap-4">
+        <!-- Status indicator -->
+        <div class="flex items-center gap-2 px-3 py-1.5 rounded-full" 
+             :class="connected ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'">
+          <span class="w-2 h-2 rounded-full" :class="connected ? 'bg-green-400' : 'bg-red-400'"></span>
+          <span class="text-xs font-medium" x-text="connected ? 'Connected' : 'Disconnected'"></span>
+        </div>
+        
+        <!-- Domain selector -->
+        <select x-model="selectedDomain" 
+                class="bg-dark-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+          <option value="auto">Auto-detect domain</option>
+          <option value="developer">Developer</option>
+          <option value="marketing">Marketing</option>
+          <option value="sales">Sales</option>
+          <option value="operations">Operations</option>
+          <option value="finance">Finance</option>
+          <option value="hr">HR</option>
+          <option value="support">Support</option>
+          <option value="general">General</option>
+        </select>
+      </div>
+    </div>
+  </header>
 
-        <footer>
-            <p>Full Agentic Employee (Enterprise) — V2</p>
-        </footer>
+  <!-- Main Content -->
+  <main class="pt-20 pb-32 max-w-4xl mx-auto px-4">
+    
+    <!-- Quick Actions -->
+    <div class="mt-6 mb-8" x-show="messages.length === 0" x-cloak>
+      <h2 class="text-2xl font-bold mb-2">What can I help you with?</h2>
+      <p class="text-gray-400 mb-6">I can handle tasks across 8 business domains with varying autonomy levels.</p>
+      
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <template x-for="action in quickActions">
+          <button @click="sendMessage(action.prompt)" 
+                  class="p-4 bg-dark-800 hover:bg-dark-900 border border-gray-700 hover:border-gray-600 rounded-xl text-left transition-all group">
+            <span class="text-2xl mb-2 block" x-text="action.icon"></span>
+            <span class="font-medium text-sm" x-text="action.label"></span>
+            <p class="text-xs text-gray-500 mt-1" x-text="action.description"></p>
+          </button>
+        </template>
+      </div>
     </div>
 
-    <script src="app.js"></script>
+    <!-- Messages -->
+    <div class="space-y-4" x-ref="messagesContainer">
+      <template x-for="(msg, index) in messages" :key="index">
+        <div class="message-enter" :class="msg.role === 'user' ? 'flex justify-end' : ''">
+          <div class="max-w-[85%] rounded-2xl px-4 py-3"
+               :class="msg.role === 'user' 
+                 ? 'bg-blue-600 text-white rounded-br-md' 
+                 : 'bg-dark-800 border border-gray-700 rounded-bl-md'">
+            
+            <!-- Tool calls -->
+            <div x-show="msg.tools && msg.tools.length > 0" class="mb-2 pb-2 border-b border-gray-600">
+              <template x-for="tool in msg.tools">
+                <div class="flex items-center gap-2 text-xs text-gray-400">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                  </svg>
+                  <span x-text="tool"></span>
+                </div>
+              </template>
+            </div>
+            
+            <!-- Message content -->
+            <div class="prose prose-invert prose-sm max-w-none" x-html="formatMessage(msg.content)"></div>
+            
+            <!-- Timestamp -->
+            <div class="mt-2 text-xs opacity-50" x-text="formatTime(msg.timestamp)"></div>
+          </div>
+        </div>
+      </template>
+      
+      <!-- Typing indicator -->
+      <div x-show="isTyping" x-cloak class="flex items-center gap-2 text-gray-400">
+        <div class="bg-dark-800 border border-gray-700 rounded-2xl rounded-bl-md px-4 py-3">
+          <div class="typing-indicator flex gap-1">
+            <span class="w-2 h-2 bg-gray-400 rounded-full"></span>
+            <span class="w-2 h-2 bg-gray-400 rounded-full"></span>
+            <span class="w-2 h-2 bg-gray-400 rounded-full"></span>
+          </div>
+        </div>
+        <span class="text-sm" x-text="typingStatus"></span>
+      </div>
+    </div>
+  </main>
+
+  <!-- Input Bar -->
+  <footer class="fixed bottom-0 left-0 right-0 bg-dark-900/80 backdrop-blur-lg border-t border-gray-800">
+    <div class="max-w-4xl mx-auto px-4 py-4">
+      <form @submit.prevent="sendMessage()" class="flex gap-3">
+        <div class="flex-1 relative">
+          <textarea 
+            x-model="input"
+            @keydown.enter.prevent="if (!$event.shiftKey) sendMessage()"
+            placeholder="Describe what you want me to do..."
+            rows="1"
+            class="w-full bg-dark-800 border border-gray-700 rounded-xl px-4 py-3 pr-12 resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500"
+            :disabled="isTyping"
+          ></textarea>
+          <button type="submit" 
+                  :disabled="!input.trim() || isTyping"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg flex items-center justify-center transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+            </svg>
+          </button>
+        </div>
+      </form>
+      
+      <!-- Run info -->
+      <div x-show="currentRunId" x-cloak class="mt-2 flex items-center justify-between text-xs text-gray-500">
+        <span>Run: <span x-text="currentRunId" class="font-mono"></span></span>
+        <span x-show="currentDomain">Domain: <span x-text="currentDomain" class="text-blue-400"></span></span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Toast notifications -->
+  <div class="fixed top-24 right-4 z-50 space-y-2">
+    <template x-for="toast in toasts" :key="toast.id">
+      <div class="bg-dark-800 border border-gray-700 rounded-lg px-4 py-3 shadow-xl flex items-center gap-3 message-enter"
+           :class="toast.type === 'error' ? 'border-red-500/50' : toast.type === 'success' ? 'border-green-500/50' : ''">
+        <span x-text="toast.message"></span>
+      </div>
+    </template>
+  </div>
+
+  <script>
+    function app() {
+      return {
+        // State
+        messages: [],
+        input: '',
+        isTyping: false,
+        typingStatus: 'Thinking...',
+        connected: false,
+        selectedDomain: 'auto',
+        currentRunId: null,
+        currentDomain: null,
+        toasts: [],
+        ws: null,
+
+        // Quick actions
+        quickActions: [
+          { icon: '💻', label: 'Write Code', description: 'Create scripts and programs', prompt: 'Write a Python script that ' },
+          { icon: '📧', label: 'Draft Email', description: 'Professional emails', prompt: 'Write a professional email to ' },
+          { icon: '📊', label: 'Analyze Data', description: 'Process and analyze', prompt: 'Analyze the data in ' },
+          { icon: '📝', label: 'Create Content', description: 'Marketing content', prompt: 'Write a LinkedIn post about ' },
+          { icon: '🔍', label: 'Research', description: 'Search and summarize', prompt: 'Research and summarize ' },
+          { icon: '📁', label: 'File Operations', description: 'Manage files', prompt: 'List all files in ' },
+          { icon: '🛠️', label: 'Automation', description: 'Automate tasks', prompt: 'Create an automation that ' },
+          { icon: '💬', label: 'General Help', description: 'Anything else', prompt: '' },
+        ],
+
+        // Initialize
+        init() {
+          this.connectWebSocket();
+          this.loadHistory();
+        },
+
+        // WebSocket connection
+        connectWebSocket() {
+          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          this.ws = new WebSocket(`${protocol}//${window.location.host}`);
+          
+          this.ws.onopen = () => {
+            this.connected = true;
+            this.showToast('Connected to server', 'success');
+          };
+          
+          this.ws.onclose = () => {
+            this.connected = false;
+            this.showToast('Connection lost. Reconnecting...', 'error');
+            setTimeout(() => this.connectWebSocket(), 3000);
+          };
+          
+          this.ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            this.handleWSMessage(data);
+          };
+        },
+
+        // Handle WebSocket messages
+        handleWSMessage(data) {
+          console.log('WS:', data);
+          
+          switch (data.type) {
+            case 'agent':
+              if (data.status === 'starting') {
+                this.currentRunId = data.runId;
+                this.isTyping = true;
+                this.typingStatus = 'Starting...';
+              } else if (data.status === 'iteration') {
+                this.typingStatus = `Iteration ${data.iteration}...`;
+              } else if (data.status === 'tool') {
+                this.typingStatus = `Using ${data.tool}...`;
+              } else if (data.status === 'complete') {
+                this.isTyping = false;
+                if (data.response) {
+                  this.addMessage('assistant', data.response, data.tools);
+                }
+                if (data.domain) {
+                  this.currentDomain = data.domain;
+                }
+              } else if (data.status === 'error') {
+                this.isTyping = false;
+                this.showToast(data.error || 'An error occurred', 'error');
+              }
+              break;
+              
+            case 'domain':
+              this.currentDomain = data.domain;
+              this.showToast(`Switched to ${data.domain} domain`, 'info');
+              break;
+          }
+        },
+
+        // Send message
+        async sendMessage(customPrompt) {
+          const text = customPrompt || this.input.trim();
+          if (!text || this.isTyping) return;
+          
+          this.input = '';
+          this.addMessage('user', text);
+          this.isTyping = true;
+          this.typingStatus = 'Thinking...';
+          
+          try {
+            const response = await fetch('/api/agent/run', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                objective: text,
+                domain: this.selectedDomain !== 'auto' ? this.selectedDomain : undefined,
+              }),
+            });
+            
+            const result = await response.json();
+            
+            if (!result.success) {
+              throw new Error(result.error || 'Request failed');
+            }
+            
+            // Response comes via WebSocket
+            
+          } catch (error) {
+            this.isTyping = false;
+            this.showToast(error.message, 'error');
+            this.addMessage('assistant', `Error: ${error.message}`);
+          }
+        },
+
+        // Add message to chat
+        addMessage(role, content, tools = []) {
+          this.messages.push({
+            role,
+            content,
+            tools,
+            timestamp: new Date(),
+          });
+          
+          this.$nextTick(() => {
+            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+          });
+          
+          this.saveHistory();
+        },
+
+        // Format message with markdown-like syntax
+        formatMessage(text) {
+          if (!text) return '';
+          
+          return text
+            // Code blocks
+            .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre class="bg-dark-950 rounded-lg p-3 my-2 overflow-x-auto"><code>$2</code></pre>')
+            // Inline code
+            .replace(/`([^`]+)`/g, '<code class="bg-dark-950 px-1 rounded">$1</code>')
+            // Bold
+            .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+            // Headers
+            .replace(/^### (.+)$/gm, '<h3 class="text-lg font-semibold mt-3 mb-1">$1</h3>')
+            .replace(/^## (.+)$/gm, '<h2 class="text-xl font-semibold mt-4 mb-2">$1</h2>')
+            // Lists
+            .replace(/^- (.+)$/gm, '<li class="ml-4">$1</li>')
+            // Line breaks
+            .replace(/\n/g, '<br>');
+        },
+
+        // Format timestamp
+        formatTime(date) {
+          return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        },
+
+        // Show toast notification
+        showToast(message, type = 'info') {
+          const id = Date.now();
+          this.toasts.push({ id, message, type });
+          setTimeout(() => {
+            this.toasts = this.toasts.filter(t => t.id !== id);
+          }, 4000);
+        },
+
+        // Save/load history
+        saveHistory() {
+          localStorage.setItem('agenticHistory', JSON.stringify(this.messages.slice(-50)));
+        },
+        
+        loadHistory() {
+          try {
+            const saved = localStorage.getItem('agenticHistory');
+            if (saved) {
+              this.messages = JSON.parse(saved);
+            }
+          } catch (e) {}
+        },
+      };
+    }
+  </script>
 </body>
 </html>

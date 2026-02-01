@@ -11,6 +11,8 @@ import { addSecret, listSecrets, revokeSecret } from '../vault/store.js';
 import { runObjective, createAgentLoop, AgentResult } from '../core/agent-loop.js';
 import { generatePlan } from '../planner/index.js';
 import { getMemoryStore } from '../memory/index.js';
+import { listDomains, getBrain } from '../domains/index.js';
+import { listRecentRuns, loadJournal, exportJournalSummary, rollbackEntry, rollbackRun } from '../journal/index.js';
 import type { RunContext } from '../core/types.js';
 import type { Message } from '../ai/types.js';
 
@@ -40,25 +42,61 @@ export function createAPIRouter(wss: WebSocketServer) {
    */
   router.post('/agent/run', async (req, res) => {
     try {
-      const { objective, verbose, maxIterations, maxToolCalls } = req.body;
+      const { objective, verbose, maxIterations, maxToolCalls, domain } = req.body;
 
       if (!objective) {
         return res.status(400).json({ success: false, error: 'Objective is required' });
       }
 
-      broadcast({ type: 'agent', status: 'starting', objective, timestamp: new Date().toISOString() });
-
-      const result = await runObjective(objective, {
-        verbose: verbose ?? false,
-        maxIterations: maxIterations ?? 50,
-        maxToolCalls: maxToolCalls ?? 100,
+      // Generate run ID
+      const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      
+      broadcast({ 
+        type: 'agent', 
+        status: 'starting', 
+        objective, 
+        runId,
+        timestamp: new Date().toISOString() 
       });
 
-      broadcast({ type: 'agent', status: 'completed', result, timestamp: new Date().toISOString() });
+      // Return immediately, run in background
+      res.json({ success: true, runId, message: 'Task started' });
 
-      res.json({ success: true, result });
+      // Run the agent (async)
+      try {
+        const result = await runObjective(objective, {
+          verbose: verbose ?? false,
+          maxIterations: maxIterations ?? 50,
+          maxToolCalls: maxToolCalls ?? 100,
+          domain: domain as any,
+        });
+
+        // Collect tools used from the result
+        const toolsUsed: string[] = [];
+        
+        broadcast({ 
+          type: 'agent', 
+          status: 'complete', 
+          runId,
+          success: result.success,
+          response: result.finalResponse,
+          domain: domain || 'general',
+          iterations: result.iterations,
+          toolCalls: result.toolCalls,
+          tools: toolsUsed,
+          timestamp: new Date().toISOString() 
+        });
+      } catch (runError: any) {
+        broadcast({ 
+          type: 'agent', 
+          status: 'error', 
+          runId,
+          error: runError.message,
+          timestamp: new Date().toISOString() 
+        });
+      }
     } catch (error: any) {
-      broadcast({ type: 'error', message: error.message });
+      broadcast({ type: 'agent', status: 'error', error: error.message });
       res.status(500).json({ success: false, error: error.message });
     }
   });
@@ -297,6 +335,72 @@ export function createAPIRouter(wss: WebSocketServer) {
       const store = getMemoryStore();
       const deleted = await store.delete(req.params.key);
       res.json({ success: true, deleted });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // ============ DOMAIN ENDPOINTS ============
+
+  router.get('/domains', (req, res) => {
+    try {
+      const domains = listDomains();
+      res.json({ success: true, domains });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  router.get('/domains/:id', (req, res) => {
+    try {
+      const brain = getBrain(req.params.id as any);
+      res.json({ success: true, domain: brain });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // ============ JOURNAL ENDPOINTS ============
+
+  router.get('/journal/runs', async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 20;
+      const runs = await listRecentRuns(limit);
+      res.json({ success: true, runs });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  router.get('/journal/run/:runId', async (req, res) => {
+    try {
+      const entries = await loadJournal(req.params.runId);
+      const summary = await exportJournalSummary(req.params.runId);
+      res.json({ success: true, runId: req.params.runId, entries, summary });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  router.post('/journal/rollback', async (req, res) => {
+    try {
+      const { runId, entryId } = req.body;
+      
+      if (!runId) {
+        return res.status(400).json({ success: false, error: 'runId is required' });
+      }
+      
+      let result;
+      if (entryId) {
+        // Rollback single entry
+        result = await rollbackEntry(entryId, runId);
+      } else {
+        // Rollback entire run
+        result = await rollbackRun(runId);
+      }
+      
+      broadcast({ type: 'journal', action: 'rollback', runId, entryId, result });
+      res.json({ ...result });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error.message });
     }
