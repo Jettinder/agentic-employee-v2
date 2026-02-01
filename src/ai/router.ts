@@ -19,7 +19,7 @@ import { GeminiProvider } from './providers/gemini.js';
 import { auditEvent } from '../audit/logger.js';
 import type { RunContext } from '../core/types.js';
 
-// Default routing rules - Models configured via environment variables
+// Default routing rules - Using OpenAI as primary (more reliable)
 const DEFAULT_ROUTING_RULES: RoutingRule[] = [
   {
     match: { taskType: 'search', keywords: ['search', 'find', 'lookup', 'current', 'latest', 'news', 'today'] },
@@ -29,20 +29,20 @@ const DEFAULT_ROUTING_RULES: RoutingRule[] = [
   },
   {
     match: { taskType: 'coding', keywords: ['code', 'function', 'bug', 'debug', 'implement', 'refactor', 'typescript', 'python'] },
-    provider: 'anthropic',
-    model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
+    provider: 'openai',
+    model: process.env.OPENAI_MODEL || 'gpt-4o',
     reason: 'Superior coding capabilities',
   },
   {
     match: { taskType: 'analysis', keywords: ['analyze', 'explain', 'compare', 'review', 'understand'] },
-    provider: 'anthropic',
-    model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
+    provider: 'openai',
+    model: process.env.OPENAI_MODEL || 'gpt-4o',
     reason: 'Deep reasoning and analysis',
   },
   {
     match: { taskType: 'planning', keywords: ['plan', 'steps', 'how to', 'strategy', 'approach'] },
-    provider: 'anthropic',
-    model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
+    provider: 'openai',
+    model: process.env.OPENAI_MODEL || 'gpt-4o',
     reason: 'Strong planning and decomposition',
   },
   {
@@ -53,8 +53,8 @@ const DEFAULT_ROUTING_RULES: RoutingRule[] = [
   },
   {
     match: { taskType: 'execution', toolRequired: ['filesystem', 'terminal', 'editor', 'computer'] },
-    provider: 'anthropic',
-    model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
+    provider: 'openai',
+    model: process.env.OPENAI_MODEL || 'gpt-4o',
     reason: 'Reliable tool execution',
   },
 ];
