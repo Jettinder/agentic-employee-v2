@@ -16,10 +16,11 @@ import { OpenAIProvider } from './providers/openai.js';
 import { AnthropicProvider } from './providers/anthropic.js';
 import { PerplexityProvider } from './providers/perplexity.js';
 import { GeminiProvider } from './providers/gemini.js';
+import { CLIProvider, detectCLITools, createCLIProvider, type CLITool } from './providers/cli.js';
 import { auditEvent } from '../audit/logger.js';
 import type { RunContext } from '../core/types.js';
 
-// Default routing rules - Using OpenAI as primary (more reliable)
+// Default routing rules - Uses configured default provider
 const DEFAULT_ROUTING_RULES: RoutingRule[] = [
   {
     match: { taskType: 'search', keywords: ['search', 'find', 'lookup', 'current', 'latest', 'news', 'today'] },
@@ -29,20 +30,20 @@ const DEFAULT_ROUTING_RULES: RoutingRule[] = [
   },
   {
     match: { taskType: 'coding', keywords: ['code', 'function', 'bug', 'debug', 'implement', 'refactor', 'typescript', 'python'] },
-    provider: 'openai',
-    model: process.env.OPENAI_MODEL || 'gpt-4o',
+    provider: (process.env.DEFAULT_AI_PROVIDER as any) || 'anthropic',
+    model: process.env.ANTHROPIC_MODEL || process.env.OPENAI_MODEL || 'claude-sonnet-4-20250514',
     reason: 'Superior coding capabilities',
   },
   {
     match: { taskType: 'analysis', keywords: ['analyze', 'explain', 'compare', 'review', 'understand'] },
-    provider: 'openai',
-    model: process.env.OPENAI_MODEL || 'gpt-4o',
+    provider: (process.env.DEFAULT_AI_PROVIDER as any) || 'anthropic',
+    model: process.env.ANTHROPIC_MODEL || process.env.OPENAI_MODEL || 'claude-sonnet-4-20250514',
     reason: 'Deep reasoning and analysis',
   },
   {
     match: { taskType: 'planning', keywords: ['plan', 'steps', 'how to', 'strategy', 'approach'] },
-    provider: 'openai',
-    model: process.env.OPENAI_MODEL || 'gpt-4o',
+    provider: (process.env.DEFAULT_AI_PROVIDER as any) || 'anthropic',
+    model: process.env.ANTHROPIC_MODEL || process.env.OPENAI_MODEL || 'claude-sonnet-4-20250514',
     reason: 'Strong planning and decomposition',
   },
   {
@@ -53,8 +54,8 @@ const DEFAULT_ROUTING_RULES: RoutingRule[] = [
   },
   {
     match: { taskType: 'execution', toolRequired: ['filesystem', 'terminal', 'editor', 'computer'] },
-    provider: 'openai',
-    model: process.env.OPENAI_MODEL || 'gpt-4o',
+    provider: (process.env.DEFAULT_AI_PROVIDER as any) || 'anthropic',
+    model: process.env.ANTHROPIC_MODEL || process.env.OPENAI_MODEL || 'claude-sonnet-4-20250514',
     reason: 'Reliable tool execution',
   },
 ];
@@ -85,6 +86,15 @@ export class AIRouter {
     }
     if (this.config.gemini?.apiKey) {
       this.providers.set('gemini', new GeminiProvider(this.config.gemini));
+    }
+    
+    // Add CLI tools as fallback providers
+    const cliTools = detectCLITools();
+    for (const tool of cliTools) {
+      const cliProvider = createCLIProvider(tool);
+      if (cliProvider.isAvailable()) {
+        this.providers.set(`cli-${tool}` as any, cliProvider as any);
+      }
     }
   }
 
