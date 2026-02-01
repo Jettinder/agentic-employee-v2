@@ -14,9 +14,26 @@ import { runObjective, createAgentLoop } from './core/agent-loop.js';
 import { generatePlan, createPlanner } from './planner/index.js';
 import { getMemoryStore } from './memory/index.js';
 import { getDomainManager, listDomains, getBrain } from './domains/index.js';
+import { validateConfig, printValidationResult, hasAnyProvider } from './utils/validate-config.js';
+import { loadJournal, listRecentRuns, exportJournalSummary, rollbackEntry, rollbackRun } from './journal/index.js';
 import type { RunContext } from './core/types.js';
 import type { Message } from './ai/types.js';
 import readline from 'readline';
+
+// Colors for terminal output
+const colors = {
+  reset: '\x1b[0m',
+  bold: '\x1b[1m',
+  red: '\x1b[31m',
+  green: '\x1b[32m',
+  yellow: '\x1b[33m',
+  blue: '\x1b[34m',
+  cyan: '\x1b[36m',
+};
+
+function colorize(text: string, color: keyof typeof colors): string {
+  return `${colors[color]}${text}${colors.reset}`;
+}
 
 async function main() {
   await yargs(hideBin(process.argv))
@@ -394,9 +411,128 @@ async function main() {
       }
     )
 
+    // ============ HEALTH CHECK COMMAND ============
+    .command(
+      'check',
+      'Validate configuration and API keys',
+      (y) => y
+        .option('quick', {
+          alias: 'q',
+          type: 'boolean',
+          description: 'Quick check without API validation',
+        }),
+      async (argv) => {
+        console.log(colorize('\n🔍 Checking configuration...', 'cyan'));
+        const result = await validateConfig({ quick: argv.quick });
+        printValidationResult(result);
+        process.exit(result.valid ? 0 : 1);
+      }
+    )
+
+    // ============ JOURNAL COMMANDS ============
+    .command(
+      'journal',
+      'View and manage action journal (for rollback)',
+      (y) => y
+        .option('run', {
+          alias: 'r',
+          type: 'string',
+          description: 'Show journal for specific run ID',
+        })
+        .option('list', {
+          alias: 'l',
+          type: 'boolean',
+          description: 'List recent runs with journals',
+        })
+        .option('rollback', {
+          type: 'string',
+          description: 'Rollback an entry (entry ID)',
+        })
+        .option('rollback-run', {
+          type: 'string',
+          description: 'Rollback all actions in a run',
+        }),
+      async (argv) => {
+        if (argv.list) {
+          const runs = await listRecentRuns(20);
+          console.log(colorize('\n📋 Recent Runs with Journals\n', 'cyan'));
+          if (runs.length === 0) {
+            console.log('  No journal entries found.');
+          } else {
+            runs.forEach(r => console.log(`  ${r}`));
+          }
+          console.log('\nUse --run <id> to view details.');
+          console.log('');
+        } else if (argv['rollback-run']) {
+          const runId = argv['rollback-run'];
+          console.log(colorize(`\n⏪ Rolling back run: ${runId}...`, 'yellow'));
+          const result = await rollbackRun(runId);
+          if (result.success) {
+            console.log(colorize('\n✅ Rollback complete!', 'green'));
+          } else {
+            console.log(colorize('\n⚠️  Some rollbacks failed:', 'yellow'));
+          }
+          result.results.forEach(r => {
+            const icon = r.success ? '✅' : '❌';
+            console.log(`  ${icon} ${r.message}`);
+          });
+          console.log('');
+        } else if (argv.rollback) {
+          const entryId = argv.rollback;
+          const runId = argv.run || '';
+          if (!runId) {
+            console.log(colorize('Error: --run is required for rollback', 'red'));
+            process.exit(1);
+          }
+          console.log(colorize(`\n⏪ Rolling back entry: ${entryId}...`, 'yellow'));
+          const result = await rollbackEntry(entryId, runId);
+          console.log(result.success ? colorize(`\n✅ ${result.message}`, 'green') : colorize(`\n❌ ${result.message}`, 'red'));
+          console.log('');
+        } else if (argv.run) {
+          const summary = await exportJournalSummary(argv.run);
+          console.log('\n' + summary);
+        } else {
+          // Default: show help
+          const runs = await listRecentRuns(5);
+          console.log(colorize('\n📋 Action Journal', 'cyan'));
+          console.log('\nRecent runs:');
+          if (runs.length === 0) {
+            console.log('  No journal entries yet.');
+          } else {
+            runs.forEach(r => console.log(`  ${r}`));
+          }
+          console.log('\nCommands:');
+          console.log('  --list              List all runs');
+          console.log('  --run <id>          Show journal for a run');
+          console.log('  --rollback <entry>  Rollback a specific entry (requires --run)');
+          console.log('  --rollback-run <id> Rollback all actions in a run');
+          console.log('');
+        }
+      }
+    )
+
+    // ============ SETUP COMMAND ============
+    .command(
+      'setup',
+      'Run interactive setup wizard',
+      {},
+      async () => {
+        const { spawn } = await import('child_process');
+        const path = await import('path');
+        const { fileURLToPath } = await import('url');
+        const __dirname = path.dirname(fileURLToPath(import.meta.url));
+        const setupScript = path.join(__dirname, '..', 'scripts', 'setup.sh');
+        
+        spawn('bash', [setupScript], { stdio: 'inherit' });
+      }
+    )
+
     .demandCommand(1)
     .help()
+    .alias('h', 'help')
     .version('0.2.0')
+    .alias('V', 'version')
+    .epilogue('For more information, visit: https://github.com/Jettinder/agentic-employee-v2')
     .parse();
 }
 

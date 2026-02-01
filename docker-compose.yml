@@ -1,0 +1,29 @@
+# Agentic Employee v2 - Docker Compose
+# Quick start: docker-compose up -d
+
+version: '3.8'
+
+services:
+  agentic-employee:
+    build: .
+    container_name: agentic-employee
+    restart: unless-stopped
+    
+    # Environment variables (copy from .env.example)
+    env_file:
+      - .env
+    
+    # Persist data
+    volumes:
+      - ./data:/app/.data
+      - ./logs:/app/logs
+    
+    # Web dashboard port
+    ports:
+      - "3000:3000"
+    
+    # Run web dashboard by default
+    command: ["web"]
+
+  # Optional: Run a specific task
+  # docker-compose run --rm agentic-employee run "Your task here"
