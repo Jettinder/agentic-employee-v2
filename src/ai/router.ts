@@ -19,42 +19,42 @@ import { GeminiProvider } from './providers/gemini.js';
 import { auditEvent } from '../audit/logger.js';
 import type { RunContext } from '../core/types.js';
 
-// Default routing rules - Using latest models (Feb 2026)
+// Default routing rules - Models configured via environment variables
 const DEFAULT_ROUTING_RULES: RoutingRule[] = [
   {
     match: { taskType: 'search', keywords: ['search', 'find', 'lookup', 'current', 'latest', 'news', 'today'] },
     provider: 'perplexity',
-    model: 'sonar-pro',
+    model: process.env.PERPLEXITY_MODEL || 'sonar-pro',
     reason: 'Real-time search and current information',
   },
   {
     match: { taskType: 'coding', keywords: ['code', 'function', 'bug', 'debug', 'implement', 'refactor', 'typescript', 'python'] },
     provider: 'anthropic',
-    model: 'claude-sonnet-4-20250514',
+    model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
     reason: 'Superior coding capabilities',
   },
   {
     match: { taskType: 'analysis', keywords: ['analyze', 'explain', 'compare', 'review', 'understand'] },
     provider: 'anthropic',
-    model: 'claude-sonnet-4-20250514',
+    model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
     reason: 'Deep reasoning and analysis',
   },
   {
     match: { taskType: 'planning', keywords: ['plan', 'steps', 'how to', 'strategy', 'approach'] },
     provider: 'anthropic',
-    model: 'claude-sonnet-4-20250514',
+    model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
     reason: 'Strong planning and decomposition',
   },
   {
     match: { taskType: 'vision' },
     provider: 'openai',
-    model: 'gpt-4o',
+    model: process.env.OPENAI_MODEL || 'gpt-4o',
     reason: 'Vision capabilities',
   },
   {
     match: { taskType: 'execution', toolRequired: ['filesystem', 'terminal', 'editor', 'computer'] },
     provider: 'anthropic',
-    model: 'claude-sonnet-4-20250514',
+    model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
     reason: 'Reliable tool execution',
   },
 ];

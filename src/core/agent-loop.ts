@@ -13,6 +13,7 @@ import { emitRunReport } from './report.js';
 import { initMCP, getMCPManager } from '../mcp/index.js';
 import { DomainManager, getDomainManager, createDomainManager, type DomainId } from '../domains/index.js';
 import { initJournal } from '../journal/index.js';
+import { enhancePrompt } from '../enhancer/index.js';
 
 export interface AgentConfig {
   maxIterations?: number;
@@ -304,10 +305,26 @@ export function createAgentLoop(config?: AgentConfig): AgentLoop {
 /**
  * Quick run - create context and run objective
  */
-export async function runObjective(objective: string, config?: AgentConfig & { useMCP?: boolean }): Promise<AgentResult> {
+export async function runObjective(objective: string, config?: AgentConfig & { useMCP?: boolean; enhancePrompt?: boolean }): Promise<AgentResult> {
+  // Enhance prompt with implicit requirements (unless disabled)
+  let finalObjective = objective;
+  if (config?.enhancePrompt !== false) {
+    try {
+      const enhanced = await enhancePrompt(objective, { domain: config?.domain });
+      finalObjective = enhanced.enhanced;
+      if (config?.verbose) {
+        console.log(`[Enhancer] Domain: ${enhanced.domain}`);
+        console.log(`[Enhancer] Additions: ${enhanced.additions.join(', ')}`);
+      }
+    } catch (e) {
+      // Fallback to original if enhancement fails
+      finalObjective = objective;
+    }
+  }
+
   const ctx: RunContext = {
     runId: `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    objective: { text: objective },
+    objective: { text: finalObjective },
     createdAt: Date.now(),
   };
 
@@ -323,5 +340,5 @@ export async function runObjective(objective: string, config?: AgentConfig & { u
     getMCPManager().setRunId(ctx.runId);
   }
   
-  return agent.run(ctx, objective);
+  return agent.run(ctx, finalObjective);
 }
