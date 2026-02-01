@@ -1,24 +1,37 @@
 {
   "name": "agentic-employee-v2",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": false,
   "type": "module",
+  "bin": {
+    "agentic": "./dist/cli.js"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/cli.ts",
+    "start": "node dist/cli.js",
     "web": "tsx src/web-start.ts",
+    "run": "tsx src/cli.ts run",
+    "chat": "tsx src/cli.ts chat",
+    "plan": "tsx src/cli.ts plan",
+    "status": "tsx src/cli.ts status",
     "demo:e2e": "tsx src/cli.ts runner start demo-e2e",
+    "audit:list": "tsx src/cli.ts audit --list",
     "audit:byRun": "tsx src/cli.ts audit --runId=$RUN_ID",
     "vault:add": "tsx src/cli.ts vault add --name=$NAME --value=$VALUE --scopes=$SCOPES",
     "vault:list": "tsx src/cli.ts vault list",
-    "vault:revoke": "tsx src/cli.ts vault revoke --id=$ID"
+    "vault:revoke": "tsx src/cli.ts vault revoke --id=$ID",
+    "memory:list": "tsx src/cli.ts memory list",
+    "memory:stats": "tsx src/cli.ts memory stats"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.3",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/ws": "^8.18.1",
     "better-sqlite3": "^9.4.0",
     "cors": "^2.8.6",
+    "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "pino": "^9.0.0",
     "ws": "^8.19.0",
@@ -26,7 +39,9 @@
     "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.11.0",
+    "@types/yargs": "^17.0.35",
     "tsx": "^4.7.0",
     "typescript": "^5.4.0"
   }

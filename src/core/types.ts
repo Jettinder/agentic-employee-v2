@@ -10,6 +10,7 @@ export interface PlanStep {
   deps?: StepId[];
   fallbackParams?: Record<string, unknown>;
   retry?: { attempts: number; baseMs?: number; factor?: number; jitterPct?: number };
+  description?: string;
 }
 
 export interface RunContext {
