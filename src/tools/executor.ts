@@ -10,6 +10,7 @@ import { auditEvent } from '../audit/logger.js';
 import { preCheck } from '../guardrails/hooks.js';
 import { getComputerControl } from '../computer/index.js';
 import { getMCPManager } from '../mcp/index.js';
+import { getEmailClient, getCalendarClient, getSlackClient, getNotificationManager } from '../integrations/index.js';
 
 export interface ToolResult {
   success: boolean;
@@ -58,6 +59,18 @@ export async function executeTool(
         break;
       case 'computer':
         result = await executeComputer(ctx, args);
+        break;
+      case 'email':
+        result = await executeEmail(ctx, args);
+        break;
+      case 'calendar':
+        result = await executeCalendar(ctx, args);
+        break;
+      case 'slack':
+        result = await executeSlack(ctx, args);
+        break;
+      case 'notify':
+        result = await executeNotify(ctx, args);
         break;
       default:
         // Check if it's an MCP tool
@@ -441,4 +454,114 @@ async function executeComputer(ctx: RunContext, args: any): Promise<any> {
     default:
       throw new Error(`Unknown computer action: ${action}`);
   }
+}
+
+/**
+ * Email operations
+ */
+async function executeEmail(ctx: RunContext, args: any): Promise<any> {
+  const client = getEmailClient();
+  const { action } = args;
+
+  switch (action) {
+    case 'send': {
+      const { to, subject, body } = args;
+      return client.send({
+        to: Array.isArray(to) ? to : [to],
+        subject,
+        html: body,
+      });
+    }
+    case 'send_template': {
+      const { to, template, templateData } = args;
+      return client.sendTemplate(
+        Array.isArray(to) ? to : [to],
+        template,
+        templateData || {}
+      );
+    }
+    default:
+      throw new Error(`Unknown email action: ${action}`);
+  }
+}
+
+/**
+ * Calendar operations
+ */
+async function executeCalendar(ctx: RunContext, args: any): Promise<any> {
+  const client = getCalendarClient();
+  const { action } = args;
+
+  switch (action) {
+    case 'create': {
+      const { summary, description, start, end, attendees } = args;
+      return client.createEvent({
+        summary,
+        description,
+        start: new Date(start),
+        end: new Date(end),
+        attendees,
+      });
+    }
+    case 'list': {
+      const { hours } = args;
+      const now = new Date();
+      const future = new Date(now.getTime() + (hours || 24) * 60 * 60 * 1000);
+      return client.listEvents({ timeMin: now, timeMax: future });
+    }
+    case 'upcoming': {
+      const { hours } = args;
+      return client.getUpcoming(hours || 24);
+    }
+    case 'delete': {
+      const { eventId } = args;
+      return client.deleteEvent(eventId);
+    }
+    case 'find_slot': {
+      const { duration } = args;
+      return client.findFreeSlot(duration || 30);
+    }
+    default:
+      throw new Error(`Unknown calendar action: ${action}`);
+  }
+}
+
+/**
+ * Slack operations
+ */
+async function executeSlack(ctx: RunContext, args: any): Promise<any> {
+  const client = getSlackClient();
+  const { action } = args;
+
+  switch (action) {
+    case 'send': {
+      const { channel, message, threadTs } = args;
+      return client.sendMessage({ channel, text: message, threadTs });
+    }
+    case 'notify': {
+      const { type, title, message, channel } = args;
+      return client.sendNotification(type, title, message, channel);
+    }
+    case 'list_channels': {
+      return client.listChannels();
+    }
+    default:
+      throw new Error(`Unknown slack action: ${action}`);
+  }
+}
+
+/**
+ * Notification operations
+ */
+async function executeNotify(ctx: RunContext, args: any): Promise<any> {
+  const manager = getNotificationManager();
+  const { type, title, message, priority, channels } = args;
+
+  return manager.notify({
+    type,
+    title,
+    message,
+    priority,
+    channels,
+  }, ctx);
 }

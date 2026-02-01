@@ -333,6 +333,8 @@ export const computerTool: ToolDefinition = {
   },
 };
 
+import { getIntegrationTools } from '../integrations/tools.js';
+
 /**
  * Get all built-in tools
  */
@@ -347,6 +349,7 @@ export function getBuiltinTools(): ToolDefinition[] {
     requestApprovalTool,
     reportTool,
     computerTool,
+    ...getIntegrationTools(),
   ];
 }
 
