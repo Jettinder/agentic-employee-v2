@@ -11,6 +11,7 @@ import { preCheck } from '../guardrails/hooks.js';
 import { getComputerControl } from '../computer/index.js';
 import { getMCPManager } from '../mcp/index.js';
 import { getEmailClient, getCalendarClient, getSlackClient, getNotificationManager } from '../integrations/index.js';
+import * as journal from '../journal/index.js';
 
 export interface ToolResult {
   success: boolean;
@@ -72,6 +73,9 @@ export async function executeTool(
       case 'notify':
         result = await executeNotify(ctx, args);
         break;
+      case 'journal':
+        result = await executeJournal(ctx, args);
+        break;
       default:
         // Check if it's an MCP tool
         const mcpManager = getMCPManager();
@@ -100,48 +104,97 @@ export async function executeTool(
 }
 
 /**
- * Filesystem operations
+ * Filesystem operations (with journal tracking)
  */
 async function executeFilesystem(ctx: RunContext, args: any): Promise<any> {
   const { promises: fs } = await import('fs');
-  const { op, path, content, mode, destination } = args;
-
-  // Use existing execution for basic ops
-  if (['write', 'mkdir', 'chmod'].includes(op)) {
-    return execFilesystem(ctx, { op, path, content, mode });
-  }
+  const { existsSync } = await import('fs');
+  const { op, path: filePath, content, mode, destination } = args;
 
   switch (op) {
+    case 'write': {
+      // Check if file exists for journal
+      let originalContent: string | null = null;
+      const fileExists = existsSync(filePath);
+      if (fileExists) {
+        try {
+          originalContent = await fs.readFile(filePath, 'utf-8');
+        } catch {}
+      }
+      
+      // Write the file
+      const result = await execFilesystem(ctx, { op, path: filePath, content, mode });
+      
+      // Journal the action
+      if (fileExists && originalContent !== null) {
+        await journal.journalFileModify(ctx.runId, filePath, originalContent, content);
+      } else {
+        await journal.journalFileCreate(ctx.runId, filePath, content);
+      }
+      
+      return result;
+    }
+    
+    case 'mkdir': {
+      const result = await execFilesystem(ctx, { op, path: filePath, content, mode });
+      await journal.journalDirectoryCreate(ctx.runId, filePath);
+      return result;
+    }
+    
+    case 'chmod': {
+      return execFilesystem(ctx, { op, path: filePath, content, mode });
+    }
+    
     case 'read': {
-      const data = await fs.readFile(path, 'utf-8');
+      const data = await fs.readFile(filePath, 'utf-8');
       return { content: data, size: data.length };
     }
+    
     case 'list': {
-      const entries = await fs.readdir(path, { withFileTypes: true });
+      const entries = await fs.readdir(filePath, { withFileTypes: true });
       return entries.map(e => ({
         name: e.name,
         type: e.isDirectory() ? 'directory' : 'file',
       }));
     }
+    
     case 'delete': {
-      await fs.rm(path, { recursive: true, force: true });
-      return { deleted: path };
+      // Backup content before delete for journal
+      let originalContent: string | null = null;
+      try {
+        const stat = await fs.stat(filePath);
+        if (stat.isFile()) {
+          originalContent = await fs.readFile(filePath, 'utf-8');
+        }
+      } catch {}
+      
+      await fs.rm(filePath, { recursive: true, force: true });
+      
+      // Journal the deletion
+      if (originalContent !== null) {
+        await journal.journalFileDelete(ctx.runId, filePath, originalContent);
+      }
+      
+      return { deleted: filePath };
     }
+    
     case 'move': {
-      await fs.rename(path, destination);
-      return { moved: path, to: destination };
+      await fs.rename(filePath, destination);
+      return { moved: filePath, to: destination };
     }
+    
     case 'copy': {
-      await fs.cp(path, destination, { recursive: true });
-      return { copied: path, to: destination };
+      await fs.cp(filePath, destination, { recursive: true });
+      return { copied: filePath, to: destination };
     }
+    
     default:
       throw new Error(`Unknown filesystem operation: ${op}`);
   }
 }
 
 /**
- * Terminal execution
+ * Terminal execution (with journal tracking)
  */
 async function executeTerminal(ctx: RunContext, args: any): Promise<any> {
   const result = await execTerminal(ctx, {
@@ -149,45 +202,62 @@ async function executeTerminal(ctx: RunContext, args: any): Promise<any> {
     cwd: args.cwd,
   });
   
-  return {
+  const output = {
     stdout: result.stdout || '',
     stderr: result.stderr || '',
     exitCode: result.exitCode ?? (result.ok ? 0 : 1),
   };
+  
+  // Journal the terminal command (for audit, not rollbackable)
+  await journal.journalTerminalCommand(
+    ctx.runId, 
+    args.cmd, 
+    output.stdout + (output.stderr ? '\n' + output.stderr : '')
+  );
+  
+  return output;
 }
 
 /**
- * Editor operations
+ * Editor operations (with journal tracking)
  */
 async function executeEditor(ctx: RunContext, args: any): Promise<any> {
   const { promises: fs } = await import('fs');
-  const { path, op, search, replace, line, content, startLine, endLine, patch } = args;
+  const { path: filePath, op, search, replace, line, content, startLine, endLine, patch } = args;
 
   switch (op) {
     case 'replace': {
-      const fileContent = await fs.readFile(path, 'utf-8');
+      const fileContent = await fs.readFile(filePath, 'utf-8');
       const newContent = fileContent.replace(search, replace);
-      await fs.writeFile(path, newContent);
-      return { replaced: true, path };
+      await fs.writeFile(filePath, newContent);
+      // Journal the modification
+      await journal.journalFileModify(ctx.runId, filePath, fileContent, newContent, `Replace in ${filePath}`);
+      return { replaced: true, path: filePath };
     }
     case 'insert': {
-      const fileContent = await fs.readFile(path, 'utf-8');
+      const fileContent = await fs.readFile(filePath, 'utf-8');
       const lines = fileContent.split('\n');
       lines.splice(line - 1, 0, content);
-      await fs.writeFile(path, lines.join('\n'));
-      return { inserted: true, path, atLine: line };
+      const newContent = lines.join('\n');
+      await fs.writeFile(filePath, newContent);
+      // Journal the modification
+      await journal.journalFileModify(ctx.runId, filePath, fileContent, newContent, `Insert at line ${line} in ${filePath}`);
+      return { inserted: true, path: filePath, atLine: line };
     }
     case 'delete_lines': {
-      const fileContent = await fs.readFile(path, 'utf-8');
+      const fileContent = await fs.readFile(filePath, 'utf-8');
       const lines = fileContent.split('\n');
       lines.splice(startLine - 1, endLine - startLine + 1);
-      await fs.writeFile(path, lines.join('\n'));
-      return { deleted: true, path, lines: `${startLine}-${endLine}` };
+      const newContent = lines.join('\n');
+      await fs.writeFile(filePath, newContent);
+      // Journal the modification
+      await journal.journalFileModify(ctx.runId, filePath, fileContent, newContent, `Delete lines ${startLine}-${endLine} in ${filePath}`);
+      return { deleted: true, path: filePath, lines: `${startLine}-${endLine}` };
     }
     case 'patch': {
       // Simple patch application - in production use a proper diff library
       // For now, delegate to execEditor
-      return execEditor(ctx, { path, patch });
+      return execEditor(ctx, { path: filePath, patch });
     }
     default:
       throw new Error(`Unknown editor operation: ${op}`);
@@ -564,4 +634,52 @@ async function executeNotify(ctx: RunContext, args: any): Promise<any> {
     priority,
     channels,
   }, ctx);
+}
+
+/**
+ * Journal operations (view history, rollback)
+ */
+async function executeJournal(ctx: RunContext, args: any): Promise<any> {
+  const { op, runId, entryId, limit } = args;
+  const targetRunId = runId || ctx.runId;
+
+  switch (op) {
+    case 'list_runs': {
+      const runs = await journal.listRecentRuns(limit || 20);
+      return { 
+        runs,
+        count: runs.length,
+        currentRun: ctx.runId
+      };
+    }
+    
+    case 'view': {
+      const entries = await journal.loadJournal(targetRunId);
+      return {
+        runId: targetRunId,
+        entries: entries.slice(0, limit || 50),
+        totalCount: entries.length,
+        rollbackableCount: entries.filter(e => e.canRollback && !e.rolledBack).length
+      };
+    }
+    
+    case 'summary': {
+      const summary = await journal.exportJournalSummary(targetRunId);
+      return { runId: targetRunId, summary };
+    }
+    
+    case 'rollback_entry': {
+      if (!entryId) {
+        throw new Error('entryId is required for rollback_entry');
+      }
+      return journal.rollbackEntry(entryId, targetRunId);
+    }
+    
+    case 'rollback_run': {
+      return journal.rollbackRun(targetRunId);
+    }
+    
+    default:
+      throw new Error(`Unknown journal operation: ${op}`);
+  }
 }

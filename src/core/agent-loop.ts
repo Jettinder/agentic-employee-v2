@@ -12,6 +12,7 @@ import { auditEvent } from '../audit/logger.js';
 import { emitRunReport } from './report.js';
 import { initMCP, getMCPManager } from '../mcp/index.js';
 import { DomainManager, getDomainManager, createDomainManager, type DomainId } from '../domains/index.js';
+import { initJournal } from '../journal/index.js';
 
 export interface AgentConfig {
   maxIterations?: number;
@@ -310,11 +311,16 @@ export async function runObjective(objective: string, config?: AgentConfig & { u
     createdAt: Date.now(),
   };
 
+  // Initialize action journal for rollback capability
+  await initJournal(ctx.runId);
+
   const agent = createAgentLoop(config);
   
   // Initialize MCP if requested (default: true)
   if (config?.useMCP !== false) {
     await agent.initMCP();
+    // Set run ID for journal tracking in MCP tools
+    getMCPManager().setRunId(ctx.runId);
   }
   
   return agent.run(ctx, objective);

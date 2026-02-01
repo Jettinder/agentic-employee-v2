@@ -335,6 +335,34 @@ export const computerTool: ToolDefinition = {
 
 import { getIntegrationTools } from '../integrations/tools.js';
 
+export const journalTool: ToolDefinition = {
+  name: 'journal',
+  description: 'View and manage action journal for the current or previous runs. Use to see what changes were made and optionally rollback.',
+  parameters: {
+    type: 'object',
+    properties: {
+      op: {
+        type: 'string',
+        enum: ['list_runs', 'view', 'summary', 'rollback_entry', 'rollback_run'],
+        description: 'Operation: list_runs (show recent runs), view (show entries), summary (human-readable), rollback_entry (undo one action), rollback_run (undo all actions in a run)',
+      },
+      runId: {
+        type: 'string',
+        description: 'Run ID to view/rollback (optional, defaults to current run)',
+      },
+      entryId: {
+        type: 'string',
+        description: 'Entry ID to rollback (for rollback_entry operation)',
+      },
+      limit: {
+        type: 'number',
+        description: 'Max number of runs/entries to show',
+      },
+    },
+    required: ['op'],
+  },
+};
+
 /**
  * Get all built-in tools
  */
@@ -349,6 +377,7 @@ export function getBuiltinTools(): ToolDefinition[] {
     requestApprovalTool,
     reportTool,
     computerTool,
+    journalTool,
     ...getIntegrationTools(),
   ];
 }

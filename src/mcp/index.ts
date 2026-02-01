@@ -7,6 +7,9 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { spawn } from 'child_process';
 import type { ToolDefinition } from '../ai/types.js';
+import * as journal from '../journal/index.js';
+import { existsSync } from 'fs';
+import { readFile } from 'fs/promises';
 
 export interface MCPServerConfig {
   name: string;
@@ -162,9 +165,9 @@ export class MCPClientManager {
   }
 
   /**
-   * Execute an MCP tool
+   * Execute an MCP tool (with journal tracking for filesystem operations)
    */
-  async executeTool(toolId: string, args: Record<string, any>): Promise<any> {
+  async executeTool(toolId: string, args: Record<string, any>, runId?: string): Promise<any> {
     const toolInfo = this.tools.get(toolId);
     if (!toolInfo) {
       throw new Error(`Unknown MCP tool: ${toolId}`);
@@ -175,12 +178,66 @@ export class MCPClientManager {
       throw new Error(`MCP server not connected: ${toolInfo.server}`);
     }
 
+    // Journal tracking for filesystem operations
+    const journalRunId = runId || this.currentRunId;
+    if (journalRunId && toolInfo.server === 'filesystem') {
+      await this.journalFilesystemOp(journalRunId, toolInfo.tool.name, args);
+    }
+
     const result = await client.callTool({
       name: toolInfo.tool.name,
       arguments: args,
     });
 
     return result;
+  }
+
+  // Current run ID for journal tracking
+  private currentRunId: string | null = null;
+  
+  setRunId(runId: string): void {
+    this.currentRunId = runId;
+  }
+
+  /**
+   * Journal filesystem operations from MCP
+   */
+  private async journalFilesystemOp(runId: string, toolName: string, args: Record<string, any>): Promise<void> {
+    try {
+      const filePath = args.path as string;
+      
+      switch (toolName) {
+        case 'write_file': {
+          // Check if file exists
+          const fileExists = existsSync(filePath);
+          let originalContent: string | null = null;
+          if (fileExists) {
+            try {
+              originalContent = await readFile(filePath, 'utf-8');
+            } catch {}
+          }
+          
+          // Defer journaling until after write (we'll journal based on result)
+          // For now, journal as create or modify
+          if (fileExists && originalContent !== null) {
+            await journal.journalFileModify(runId, filePath, originalContent, args.content || '');
+          } else {
+            await journal.journalFileCreate(runId, filePath, args.content || '');
+          }
+          break;
+        }
+        
+        case 'create_directory': {
+          await journal.journalDirectoryCreate(runId, filePath);
+          break;
+        }
+        
+        // read operations don't need journaling
+      }
+    } catch (error: any) {
+      // Don't fail the operation if journaling fails
+      console.warn(`[MCP Journal] Warning: ${error.message}`);
+    }
   }
 
   /**
