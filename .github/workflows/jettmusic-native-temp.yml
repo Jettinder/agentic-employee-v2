@@ -1,0 +1,44 @@
+name: Jettmusic Native Temp Build
+on:
+  push:
+    branches: [jettmusic-native-build]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Debug keystore
+        run: |
+          mkdir -p "$HOME/.android"
+          keytool -genkeypair -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 -validity 10000
+      - name: Clone Vivi 6.0.6
+        run: git clone --depth 1 --branch v6.0.6 https://github.com/vivizzz007/vivi-music.git vivi
+      - name: Configure Jettmusic
+        run: |
+          cp -R jettbuild/vivi-patches/. vivi/
+          sed -i 's/newpipeextractor = "v0.26.1"/newpipeextractor = "v0.26.4"/' vivi/gradle/libs.versions.toml
+          sed -i 's/applicationId = "com.vivi.vivimusic"/applicationId = "com.jett.jettmusic"/' vivi/app/build.gradle.kts
+          python3 jettbuild/tools/apply_jettmusic.py vivi
+          python3 jettbuild/tools/disable_vivi_updates.py vivi
+      - name: Build ARM64 FOSS
+        working-directory: vivi
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleArm64FossDebug --stacktrace --no-daemon
+      - name: Collect
+        run: |
+          APK="$(find vivi/app/build/outputs/apk -type f -name '*.apk' | head -1)"
+          test -n "$APK"
+          cp "$APK" Jettmusic.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Jettmusic-Native-606
+          path: Jettmusic.apk
+          if-no-files-found: error
